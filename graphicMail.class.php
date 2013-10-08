@@ -10,18 +10,21 @@ class graphicMail
     {
         $this->username = (string) $username;
         $this->password = (string) $password;
-        $this->APIURL = "https://www.graphicmail.co.uk/api.aspx?Username={$this->username}&Password={$this->password}";
+        $this->APIURL = "https://www.graphicmail.com/api.aspx?Username=$this->username&Password=$this->password";
     	$this->userData = array();
     }
 
-    private function sendRequestGraphicMail($mailQuery)
+    public function sendRequestGraphicMail($mailQuery)
     {
-        $ch = curl_init(); 
-        curl_setopt($ch, CURLOPT_URL, $mailQuery); 
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        $output = curl_exec($ch); 
-        curl_close($ch); 
-        return $output; 
+		$curl_connection = curl_init($mailQuery);
+		curl_setopt($curl_connection, CURLOPT_CONNECTTIMEOUT, 30);
+		curl_setopt($curl_connection, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($curl_connection, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($curl_connection, CURLOPT_FOLLOWLOCATION, 1);
+		$result = curl_exec($curl_connection);
+		curl_close($curl_connection);
+		return $result;
+       
     }
 
     /*
@@ -49,20 +52,18 @@ class graphicMail
     */
     public function getMailLists() 
     {
-    	$graphicMailGet = "{$this->APIURL}&Function=get_mailinglists&SID=6";
+    	$graphicMailGet = "{$this->APIURL}&Function=get_mailinglists&SID=0";
     	$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
-
-    	$myLists = simplexml_load_string($graphicMailReturned);
-    	$totalLists = $myLists->count();
-    	$listArray = array();
-
-    	$i = 0;
-    	while($i !== $totalLists)
-    	{
-    		$listArray[(string) $myLists->mailinglist[$i]->description] = (int) $myLists->mailinglist[$i]->mailinglistid;
-    		$i++;
-    	}
-	    return $listArray; 
+    	if (!$graphicMailReturned){
+			return false;
+		}
+		$myLists = simplexml_load_string($graphicMailReturned);
+		$listArray = array();
+		foreach($myLists->mailinglist as $newsletter){
+			$listArray[(string)$newsletter->description]= (int)$newsletter->mailinglistid;
+		}
+		return $listArray; 
+		
     }
 
     /*
@@ -97,20 +98,21 @@ class graphicMail
     */
     public function getDataSets() 
     {
-    	$graphicMailGet = "{$this->APIURL}&Function=get_datasets&SID=6";
+    	$graphicMailGet = "{$this->APIURL}&Function=get_datasets&SID=0";
+		
     	$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
-
+		if (!$graphicMailReturned){
+			return false;
+		}
     	$myLists = simplexml_load_string($graphicMailReturned);
-    	$totalLists = $myLists->count();
     	$listArray = array();
-
-    	$i = 0;
-    	while($i !== $totalLists)
-    	{
-    		$listArray[(string) $myLists->dataset[$i]->name] = (int) $myLists->dataset[$i]->datasetid;
-    		$i++;
-    	}
-	    return $listArray; 
+		foreach ($myLists as $list){
+			$listArray[(string) $list->name] = (int) $list->datasetid;
+		}
+		
+		return $listArray; 
+ 
+	    
     }
 
 
@@ -260,5 +262,203 @@ class graphicMail
     	}
     	unset($this->userData);
     }
+	
+	/*
+		Deletes the specified email address from the specified mailing list. (post_delete_emailaddress)
+		* @email - string email address (optional)
+		* @listID - integer, id of the maling list (required)
+		* @emailID - integer, id of the email address you want to delete (optional)
+		If email or emailID are not specified deletes all the emails in the mailing list.
+		
+	*/
+	public function deleteEmailAddress($listID = null, $email = null, $emailID = null){
+	
+		if(!$listID) {
+			return false;
+		}
+		$additionalParameters = '&Function=post_delete_emailaddress';
+		if ($email){
+			$additionalParameters .= "&EmailAddress=$email";
+		}
+		if ($emailID){
+			$additionalParameters .= "&EmailID=$emailID";
+		}
+		$additionalParameters .= "&MailinglistID=$listID&SID=0";
+		$graphicMailGet = "{$this->APIURL}$additionalParameters";
+		$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
+		if (!$graphicMailReturned){
+			return false;
+		}
+		$graphicMailExploded = explode('|', $graphicMailReturned);
+		if ($graphicMailExploded[0] == 0) 
+    	{
+    		// Error
+    		return 0;
+    	}
+    	elseif($graphicMailExploded[0] == 1)
+    	{
+    		// Added Sucessfully
+    		return 1;
+    	}
+	}
+	/*
+		Deletes all email addresses from the specified dataset (post_delete_from_dataset)
+		* @email - string email address (optional)
+		* @datasetID - integer, id of the dataset (required)
+		* @emailID - integer, id of the email address you want to delete (optional)
+		If email or emailID are not specified deletes all the emails in the mailing list.
+	*/
+	public function deleteFromDataset($datasetID = null, $email = null, $emailID = null){
+		if(!$datasetID) {
+			return false;
+		}
+		$additionalParameters = '&Function=post_delete_from_dataset';
+		if ($email){
+			$additionalParameters .= "&EmailAddress=$email";
+		}
+		if ($emailID){
+			$additionalParameters .= "&EmailID=$emailID";
+		}
+		$additionalParameters .= "&DatasetID=$datasetID&SID=0";
+		$graphicMailGet = "{$this->APIURL}$additionalParameters";
+		$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
+		if (!$graphicMailReturned){
+			return false;
+		}
+		$graphicMailExploded = explode('|', $graphicMailReturned);
+		if ($graphicMailExploded[0] == 0) 
+    	{
+    		// Error
+    		return 0;
+    	}
+    	elseif($graphicMailExploded[0] == 1)
+    	{
+    		// Added Sucessfully
+    		return 1;
+    	}
+	}
+	/*
+		 Sends a specified newsletter to a specified mailing list ( post_sendmail )
+	*/
+	public function sendMail($embedImages = "false", $fromEmail = null, $fromName = null, $mailingListID = null, $newsletterID = null, $returnSendID = "false", $subject = null, $textOnly = 0){
+		if(!$fromEmail or !$fromName or !$mailingListID or !$newsletterID or !$subject ) {
+			return false;
+		}
+		$additionalParameters = '&Function=post_sendmail&EmbedImages='.$embedImages.'&FromEmail='.$fromEmail. '&FromName='.urlencode($fromName).'&MailinglistID='.$mailingListID.'&NewsletterID='.$newsletterID.'&ReturnSendID='.$returnSendID.'&Subject='.urlencode($subject).'&TextOnly='.$textOnly.'&SID=0';
+		$graphicMailGet = $this->APIURL.$additionalParameters;
+		
+		$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
+		$graphicMailExploded = explode('|', $graphicMailReturned);
+		var_dump($graphicMailExploded);
+		if ($graphicMailExploded[0] == 0){
+			return false;
+		}
+		
+		return $graphicMailExploded;
+	}
+	/*
+		 get_newsletters 
+	*/
+	
+	public function getNewsletters (){
+		$additionalParameters = '&Function=get_newsletters&SID=0';
+		$graphicMailGet = $this->APIURL.$additionalParameters;
+		$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
+		if (!$graphicMailReturned){
+			return false;
+		}
+		$myLists = simplexml_load_string($graphicMailReturned);
+		$listArray = array();
+		foreach($myLists->newsletter as $newsletter){
+			$listArray[(string)$newsletter->newslettername]= (int)$newsletter->newsletterid;
+		}
+		return $listArray; 
+		
+	}
+	
+	/*
+		Returns all the email addresses in the specified mailing list 
+		@mailingList - 
+	*/
+	public function getMailinglist($mailingList = null)
+	{
+		if (!$mailingList){
+			return false;
+		}
+		$additionalParameters = '&Function=get_mailinglist';
+		$additionalParameters .= '&MailinglistID='.$mailingList."&SID=0";
+		$graphicMailGet = $this->APIURL.$additionalParameters;
+		$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
+		$graphicMailExploded = explode('|', $graphicMailReturned);
+		 
+		//var_dump( $graphicMailExploded[0]);
+		if (empty($graphicMailReturned)){
+			//var_dump($graphicMailExploded[0]);
+			return false;
+		}
+		//if ()
+		$myLists = simplexml_load_string($graphicMailReturned);
+		$listArray = array();
+		foreach($myLists->email as $email){
+			$listArray[(string)$email->emailaddress]= (int)$email->emailid;
+		}
+		return $listArray; 
+	}
+	
+	/*
+		*post_import_dataset 
+	
+	*/
+	public function importDataset($datasetID = null, $emailCol = null, $fileURL = null, $mailingListID = null, $col = array(), $importMode = 1, $mobileCol = null, $mobileListID = null, $sheetName = null, $isCSV = 'true' ){
+		if (!$datasetID or !$fileURL){
+			return 1;
+		}
+		if (!$emailCol and !$mobileCol){
+			return 2;
+		}
+		if (!$mailingListID and !$mobileListID){
+			return 3;
+		}
+		if (($emailCol and !$mailingListID ) or ($mobileCol and !$mobileListID)){
+			return 4;
+		}
+		if (count($col)<1){
+			return 5;
+		}
+		
+		$additionalParameters = '&Function=post_import_dataset';
+		$additionalParameters .= '&DatasetID='.$datasetID;
+		$additionalParameters .= '&FileUrl='.$fileURL;
+		foreach ($col as $key=>$value){
+			$additionalParameters .= '&'.$key.'='.$value;
+		}
+		if ($emailCol){
+			$additionalParameters .= "&EmailCol=$emailCol";
+		}
+		if ($mobileCol){
+			$additionalParameters .= "&MobileCol=$mobileCol";
+		}
+		if ($mailingListID){
+			$additionalParameters .= "&MailingListID=$mailingListID";
+		}
+		if ($mobileListID){
+			$additionalParameters .= "&MobileListID=$mobileListID";
+		}
+		if ($sheetName){
+			$additionalParameters .= "&Sheetname=$sheetName";
+		}
+		
+		
+		$additionalParameters .= "&ImportMode=$importMode&IsCsv=$isCSV&SID=0";
+		$graphicMailGet = $this->APIURL.$additionalParameters;
+		$graphicMailReturned = $this->sendRequestGraphicMail($graphicMailGet);
+		$graphicMailExploded = explode('|', $graphicMailReturned);
+		//var_dump($graphicMailReturned);
+		if (!$graphicMailReturned or $graphicMailExploded[0] == 0){
+			return 6;
+		}
+		return $graphicMailExploded;
+		
+	}
 }
 ?>
